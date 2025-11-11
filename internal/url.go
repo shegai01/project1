@@ -1,19 +1,24 @@
 package internal
 
-import "net/http"
+import (
+	"net/http"
+	"time"
+)
 
-type Result struct {
-	Url     string
-	Success bool
-}
-
-func CheckUrls(url string, res chan<- Result) {
-	response, err := http.Get(url)
+func CheckUrl(url string) Result {
+	client := http.Client{Timeout: 5 * time.Second}
+	res, err := client.Get(url)
 	if err != nil {
-		res <- Result{Url: url, Success: false}
-		return
+		return Result{
+			URL:     url,
+			Success: false,
+			Error:   err.Error(),
+		}
 	}
-	success := response.StatusCode == 200
-	response.Body.Close()
-	res <- Result{Url: url, Success: success}
+	defer res.Body.Close()
+	return Result{
+		URL:     url,
+		Success: res.StatusCode == http.StatusOK,
+	}
+
 }
