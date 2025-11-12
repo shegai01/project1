@@ -5,3 +5,4 @@ run:
 
 stop:
 	@fuser -k ${PORT}/tcp
+

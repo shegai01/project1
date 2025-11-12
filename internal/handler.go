@@ -2,6 +2,7 @@ package internal
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -96,14 +97,16 @@ func (h *Handler) GetbyID(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusInternalServerError)
 		return
 	}
+	defer func() {
+		recover()
+		log.Println("input incorrect")
+	}()
 
-	for key, val := range response {
-		if key == id {
-			if err := json.NewEncoder(w).Encode(val); err != nil {
-				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-				return
-			}
-		}
+	result := response[id]
+
+	if err := json.NewEncoder(w).Encode(result); err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
 	}
 
 }
