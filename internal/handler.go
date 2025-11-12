@@ -8,9 +8,9 @@ import (
 )
 
 type Handler struct {
-	router *mux.Router
+	router  *mux.Router
+	storage []StatusResponse
 }
-
 type Links struct {
 	Urls []string `json:"urls"`
 }
@@ -35,16 +35,14 @@ func NewHandler(router *mux.Router) *Handler {
 	return h
 }
 
-type SaveInMemory struct {
-	Array []StatusResponse
-}
-
 func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
 	initContentType(w)
+
 	var reqBody Links
+
 	results := make(map[string]string)
 	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		Error(w, http.StatusInternalServerError)
 		return
 	}
 
@@ -64,15 +62,30 @@ func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
 		}
 
 	}
+
 	responseBody = StatusResponse{
 		Links:   results,
 		LinksID: uint64(len(reqBody.Urls)),
 	}
-	var storage SaveInMemory
-	storage.Array = append(storage.Array, responseBody)
+
+	h.storage = append(h.storage, responseBody)
 
 	if err := json.NewEncoder(w).Encode(responseBody); err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
+	}
+
+}
+
+func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
+	initContentType(w)
+	response := h.storage
+	// var responseBody StatusResponse
+
+	for _, val := range response {
+		if err := json.NewEncoder(w).Encode(val); err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
 	}
 }
