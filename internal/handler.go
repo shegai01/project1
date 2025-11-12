@@ -3,12 +3,14 @@ package internal
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/gorilla/mux"
 )
 
 type Handler struct {
-	router *mux.Router
+	router  *mux.Router
+	storage []StatusResponse
 }
 type Links struct {
 	Urls []string `json:"urls"`
@@ -17,10 +19,6 @@ type Links struct {
 type StatusResponse struct {
 	Links   map[string]string `json:"links"`
 	LinksID uint64            `json:"links_num"`
-}
-
-type Storage struct {
-	Array []StatusResponse
 }
 
 func initContentType(w http.ResponseWriter) {
@@ -45,7 +43,7 @@ func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
 
 	results := make(map[string]string)
 	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		Error(w, http.StatusInternalServerError)
 		return
 	}
 
@@ -71,11 +69,41 @@ func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
 		LinksID: uint64(len(reqBody.Urls)),
 	}
 
-	var storage Storage
-	storage.Array = append(storage.Array, responseBody)
+	h.storage = append(h.storage, responseBody)
 
 	if err := json.NewEncoder(w).Encode(responseBody); err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		Error(w, http.StatusBadRequest)
 		return
 	}
+}
+
+func (h *Handler) GetbyID(w http.ResponseWriter, r *http.Request) {
+	initContentType(w)
+
+	idstr := r.URL.Query().Get("id")
+
+	id, err := strconv.Atoi(idstr)
+	// iduint := uint(id)
+
+	if err != nil {
+		Error(w, http.StatusNotFound)
+		return
+	}
+
+	response := h.storage
+
+	if len(response) == 0 {
+		Error(w, http.StatusInternalServerError)
+		return
+	}
+
+	for key, val := range response {
+		if key == id {
+			if err := json.NewEncoder(w).Encode(val); err != nil {
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+				return
+			}
+		}
+	}
+
 }
