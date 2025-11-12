@@ -8,18 +8,14 @@ import (
 )
 
 type Handler struct {
-	// logger *slog.Logger
-	mx *mux.Router
+	router *mux.Router
 }
-
-type Result struct {
-	URL     string `json:"url"`
-	Success bool   `json:"success"`
-	Error   string `json:"error"`
+type Links struct {
+	Urls []string `json:"urls"`
 }
-
-type StatusReq struct {
-	Results []Result `json:"results"`
+type StatusResponse struct {
+	Links   map[string]string `json:"links"`
+	LinksID uint64            `json:"links_num"`
 }
 
 func initContentType(w http.ResponseWriter) {
@@ -31,21 +27,43 @@ func Error(w http.ResponseWriter, statusCode int) {
 }
 
 func NewHandler(router *mux.Router) *Handler {
-	h := &Handler{}
+	h := &Handler{
+		router: router,
+	}
 	return h
 }
 
 func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
 	initContentType(w)
-	var req StatusReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "json.NewDecoder(r.Body", http.StatusInternalServerError)
+	var reqBody Links
+	results := make(map[string]string)
+	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	results := make([]Result, 0, len(req.Results))
-	for _, url := range req.Results {
-		results = append(results, CheckUrl(url.URL))
+	var responseBody StatusResponse
+	for _, val := range reqBody.Urls {
+		response, err := http.Head(val)
+		if err != nil {
+			results[val] = "not available"
+			continue
+		}
+		response.Body.Close()
+
+		if response.StatusCode == http.StatusOK {
+			results[val] = "available"
+		} else {
+			results[val] = "not available"
+		}
+
 	}
-	json.NewEncoder(w).Encode(StatusReq{Results: results})
+	responseBody = StatusResponse{
+		Links:   results,
+		LinksID: uint64(len(reqBody.Urls)),
+	}
+	if err := json.NewEncoder(w).Encode(responseBody); err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
 }
