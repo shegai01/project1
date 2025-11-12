@@ -13,6 +13,7 @@ type Handler struct {
 type Links struct {
 	Urls []string `json:"urls"`
 }
+
 type StatusResponse struct {
 	Links   map[string]string `json:"links"`
 	LinksID uint64            `json:"links_num"`
@@ -39,7 +40,9 @@ func NewHandler(router *mux.Router) *Handler {
 
 func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
 	initContentType(w)
+
 	var reqBody Links
+
 	results := make(map[string]string)
 	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -62,6 +65,7 @@ func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
 		}
 
 	}
+
 	responseBody = StatusResponse{
 		Links:   results,
 		LinksID: uint64(len(reqBody.Urls)),
