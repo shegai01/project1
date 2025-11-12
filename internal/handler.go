@@ -18,6 +18,10 @@ type StatusResponse struct {
 	LinksID uint64            `json:"links_num"`
 }
 
+type Storage struct {
+	Array []StatusResponse
+}
+
 func initContentType(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 }
@@ -62,6 +66,10 @@ func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
 		Links:   results,
 		LinksID: uint64(len(reqBody.Urls)),
 	}
+
+	var storage Storage
+	storage.Array = append(storage.Array, responseBody)
+
 	if err := json.NewEncoder(w).Encode(responseBody); err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
