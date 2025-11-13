@@ -98,7 +98,7 @@ func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		h.logger.Info(" json.NewEncoder(w).Encode(resp)")
+		h.logger.Error(" json.NewEncoder(w).Encode(resp)")
 	}
 }
 
@@ -108,29 +108,23 @@ func (h *Handler) GetbyID(w http.ResponseWriter, r *http.Request) {
 	idstr := r.URL.Query().Get("id")
 
 	id, err := strconv.Atoi(idstr)
-
 	if err != nil {
-		h.logger.Info(" strconv.Atoi(idstr)")
+		h.logger.Error(" strconv.Atoi(idstr)")
 		Error(w, http.StatusNotFound)
 		return
 	}
 
 	status := h.Get(id)
 	if status == nil {
+		Error(w, http.StatusNotFound)
 		return
 	}
 
 	resp := NewStatusResponse(status)
-	links := h.storage.Saved
-
-	if len(links) == 0 {
-		Error(w, http.StatusInternalServerError)
-		return
-	}
 
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		h.logger.Info("json.NewEncoder(w)")
+		h.logger.Error("json.NewEncoder(w)")
 		return
 	}
 
