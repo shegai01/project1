@@ -2,16 +2,20 @@ package internal
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
+	"sync/atomic"
 
 	"github.com/gorilla/mux"
 )
 
+var counter uint64
+
 type Handler struct {
+	logger  *slog.Logger
 	router  *mux.Router
-	storage []StatusResponse
+	storage *Storage
 }
 type Links struct {
 	Urls []string `json:"urls"`
@@ -22,6 +26,17 @@ type StatusResponse struct {
 	LinksID uint64            `json:"links_num"`
 }
 
+func NewStatusResponse(status map[string]string) *StatusResponse {
+	return &StatusResponse{
+		Links:   status,
+		LinksID: atomic.AddUint64(&counter, 1),
+	}
+}
+
+type Storage struct {
+	Saved [][]string
+}
+
 func initContentType(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 }
@@ -30,9 +45,36 @@ func Error(w http.ResponseWriter, statusCode int) {
 	http.Error(w, http.StatusText(statusCode), statusCode)
 }
 
-func NewHandler(router *mux.Router) *Handler {
+func (h *Handler) Get(id int) map[string]string {
+
+	if id < 0 || len(h.storage.Saved)-1 < id {
+		return nil
+	}
+	res := make(map[string]string)
+	urls := h.storage.Saved[id]
+	for _, url := range urls {
+		response, err := http.Head(url)
+		if err != nil {
+			res[url] = "not available"
+			continue
+		}
+		defer response.Body.Close()
+
+		if response.StatusCode == http.StatusOK {
+			res[url] = "available"
+		} else {
+			res[url] = "not available"
+		}
+	}
+
+	return res
+}
+
+func NewHandler(router *mux.Router, logger *slog.Logger) *Handler {
 	h := &Handler{
-		router: router,
+		router:  router,
+		logger:  logger,
+		storage: &Storage{},
 	}
 	return h
 }
@@ -42,39 +84,21 @@ func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
 
 	var reqBody Links
 
-	results := make(map[string]string)
 	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+		h.logger.Error("json.NewDecoder(r.Body)")
 		Error(w, http.StatusInternalServerError)
 		return
 	}
 
-	var responseBody StatusResponse
-	for _, val := range reqBody.Urls {
-		response, err := http.Head(val)
-		if err != nil {
-			results[val] = "not available"
-			continue
-		}
-		response.Body.Close()
-
-		if response.StatusCode == http.StatusOK {
-			results[val] = "available"
-		} else {
-			results[val] = "not available"
-		}
-
+	h.storage.Saved = append(h.storage.Saved, reqBody.Urls)
+	id := len(h.storage.Saved) - 1
+	resp := map[string]any{
+		"message": "links saved",
+		"id":      id,
 	}
 
-	responseBody = StatusResponse{
-		Links:   results,
-		LinksID: uint64(len(reqBody.Urls)),
-	}
-
-	h.storage = append(h.storage, responseBody)
-
-	if err := json.NewEncoder(w).Encode(responseBody); err != nil {
-		Error(w, http.StatusBadRequest)
-		return
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		h.logger.Info(" json.NewEncoder(w).Encode(resp)")
 	}
 }
 
@@ -84,28 +108,29 @@ func (h *Handler) GetbyID(w http.ResponseWriter, r *http.Request) {
 	idstr := r.URL.Query().Get("id")
 
 	id, err := strconv.Atoi(idstr)
-	// iduint := uint(id)
 
 	if err != nil {
+		h.logger.Info(" strconv.Atoi(idstr)")
 		Error(w, http.StatusNotFound)
 		return
 	}
 
-	response := h.storage
+	status := h.Get(id)
+	if status == nil {
+		return
+	}
 
-	if len(response) == 0 {
+	resp := NewStatusResponse(status)
+	links := h.storage.Saved
+
+	if len(links) == 0 {
 		Error(w, http.StatusInternalServerError)
 		return
 	}
-	defer func() {
-		recover()
-		log.Println("input incorrect")
-	}()
 
-	result := response[id]
-
-	if err := json.NewEncoder(w).Encode(result); err != nil {
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		h.logger.Info("json.NewEncoder(w)")
 		return
 	}
 
