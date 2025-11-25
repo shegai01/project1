@@ -18,7 +18,7 @@ func main() {
 	r := mux.NewRouter()
 	r.Use(internal.MWRecoverPanic)
 	h := internal.New(logger, r, &internal.Storage{})
-	r.HandleFunc("/links", h.GetLinks)
+	r.HandleFunc("/links", h.GetStatus)
 	r.HandleFunc("/getbyid", h.GetbyID)
 	log.Fatal(http.ListenAndServe(":8080", r))
 

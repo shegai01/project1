@@ -2,6 +2,7 @@ package internal
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -32,9 +33,10 @@ type HandlerLinks struct {
 
 func NewStorage(links []string) *Storage {
 	return &Storage{
-		Links: make([][]string, 0),
+		Links: make([][]string, 0, len(links)),
 	}
 }
+
 func initContentType(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 }
@@ -51,18 +53,10 @@ func New(logger *slog.Logger, r *mux.Router, storage *Storage) *HandlerLinks {
 	}
 }
 
-func (s *Storage) Put(links []string) uint {
-	s.mu.Lock()
-	s.Links = append(s.Links, links)
-	s.mu.Unlock()
-	return uint(len(s.Links)) - 1
+func (s *Storage) Checker(arr []string) *StatusResponse {
+	status := make(map[string]string, len(arr))
 
-}
-
-func (s *Storage) Get(id uint64) *StatusResponse {
-	status := make(map[string]string)
-	links := s.Links[int(id)]
-	for _, url := range links {
+	for _, url := range arr {
 		response, err := http.Head(url)
 		if err != nil {
 			status[url] = "not available"
@@ -72,10 +66,8 @@ func (s *Storage) Get(id uint64) *StatusResponse {
 		defer response.Body.Close()
 
 		if response.StatusCode == http.StatusOK {
-			slog.Info("available")
 			status[url] = "available"
 		} else {
-			slog.Info("not available")
 			status[url] = "not available"
 		}
 	}
@@ -84,25 +76,59 @@ func (s *Storage) Get(id uint64) *StatusResponse {
 		Links:   status,
 		LinksID: uint64(len(s.Links) - 1),
 	}
-	slog.Any("id", stat)
+
 	return stat
 }
 
-func (h *HandlerLinks) GetLinks(w http.ResponseWriter, r *http.Request) {
+func (s *Storage) Put(links []string) uint {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.Links = append(s.Links, links)
+
+	return uint(len(s.Links)) - 1
+
+}
+
+func (s *Storage) Get(id uint64) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if id > uint64(len(s.Links)) {
+		slog.Info("incorretly input")
+		return nil, errors.New("id < 0 || id > uint64(len(s.Links))")
+	}
+
+	links := s.Links[int(id)]
+
+	return links, nil
+}
+
+func (h *HandlerLinks) GetStatus(w http.ResponseWriter, r *http.Request) {
 	var reqBody RequestLinks
 	initContentType(w)
+
 	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
 		slog.Info("son.NewDecoder(r.Body).Decode(&reqBody);")
 		return
 	}
+
 	id := h.storage.Put(reqBody.Links)
 	if len(reqBody.Links) == 0 {
 		slog.Info("h.storage.Put(reqBody.Links)")
 		return
 	}
 
-	status := h.storage.Get(uint64(id))
-	slog.Any("status", status)
+	sample, err := h.storage.Get(uint64(id))
+	if err != nil {
+		slog.Info("incorrectly input")
+		return
+	}
+
+	status := h.storage.Checker(sample)
+
+	slog.Info("status")
+
 	if err := json.NewEncoder(w).Encode(status); err != nil {
 		slog.Info("json.NewEncoder(w).encode")
 		return
@@ -112,17 +138,25 @@ func (h *HandlerLinks) GetLinks(w http.ResponseWriter, r *http.Request) {
 
 func (h *HandlerLinks) GetbyID(w http.ResponseWriter, r *http.Request) {
 	initContentType(w)
+
 	id := r.URL.Query().Get("id")
 
 	idconv, err := strconv.Atoi(id)
 	if err != nil {
-		slog.Any("idconv", err)
-		return
-	}
-	respo := h.storage.Get(uint64(idconv))
-	if err := json.NewEncoder(w).Encode(respo); err != nil {
-		slog.Any("respo", respo)
+		slog.Info("idconv")
 		return
 	}
 
+	respo, err := h.storage.Get(uint64(idconv))
+	if err != nil {
+		return
+	}
+
+	statusResp := h.storage.Checker(respo)
+	if err := json.NewEncoder(w).Encode(statusResp); err != nil {
+		slog.Info("respo")
+		return
+	}
+
+	slog.Info("get")
 }
