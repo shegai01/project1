@@ -3,7 +3,6 @@ package internal
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -77,7 +76,7 @@ func (s *Storage) Checker(arr []string) *StatusResponse {
 		Links:   status,
 		LinksID: uint64(len(s.Links) - 1),
 	}
-	fmt.Println(s.Links)
+	// fmt.Println(s.Links)
 
 	return stat
 }

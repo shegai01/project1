@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"github.com/gorilla/mux"
-	"github.com/shegai01/27.11.25/internal"
+	"github.com/shegai01/project1/internal"
 )
 
 func main() {
