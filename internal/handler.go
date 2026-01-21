@@ -31,9 +31,9 @@ type HandlerLinks struct {
 	storage *Storage
 }
 
-func NewStorage(links []string) *Storage {
+func NewStorage() *Storage {
 	return &Storage{
-		Links: make([][]string, 0, len(links)),
+		Links: make([][]string, 0),
 	}
 }
 
@@ -53,7 +53,7 @@ func New(logger *slog.Logger, r *mux.Router, storage *Storage) *HandlerLinks {
 	}
 }
 
-func (s *Storage) Checker(arr []string) *StatusResponse {
+func (s *Storage) Checker(arr []string) *map[string]string {
 	status := make(map[string]string, len(arr))
 
 	for _, url := range arr {
@@ -72,13 +72,7 @@ func (s *Storage) Checker(arr []string) *StatusResponse {
 		}
 	}
 
-	stat := &StatusResponse{
-		Links:   status,
-		LinksID: uint64(len(s.Links) - 1),
-	}
-	// fmt.Println(s.Links)
-
-	return stat
+	return &status
 }
 
 func (s *Storage) Put(links []string) uint {
@@ -96,7 +90,7 @@ func (s *Storage) Get(id uint64) ([]string, error) {
 	defer s.mu.Unlock()
 
 	if id > uint64(len(s.Links)) {
-		slog.Info("incorretly input")
+		slog.Error("id > uint64(len(s.Links))", "incorretly input", id)
 		return nil, errors.New("id < 0 || id > uint64(len(s.Links))")
 	}
 
@@ -110,19 +104,20 @@ func (h *HandlerLinks) GetStatus(w http.ResponseWriter, r *http.Request) {
 	initContentType(w)
 
 	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
-		slog.Info("son.NewDecoder(r.Body).Decode(&reqBody);")
+		Error(w, http.StatusBadRequest)
+		slog.Error("json.NewDecoder(r.Body).Decode(&reqBody);")
 		return
 	}
 
 	id := h.storage.Put(reqBody.Links)
 	if len(reqBody.Links) == 0 {
-		slog.Info("h.storage.Put(reqBody.Links)")
+		slog.Error("h.storage.Put(reqBody.Links)", "id", id)
 		return
 	}
 
 	sample, err := h.storage.Get(uint64(id))
 	if err != nil {
-		slog.Info("incorrectly input")
+		slog.Error("h.storage.Get", "err", err)
 		return
 	}
 
@@ -131,7 +126,7 @@ func (h *HandlerLinks) GetStatus(w http.ResponseWriter, r *http.Request) {
 	slog.Info("status")
 
 	if err := json.NewEncoder(w).Encode(status); err != nil {
-		slog.Info("json.NewEncoder(w).encode")
+		slog.Error("json.NewEncoder(w).encode", "err", err)
 		return
 	}
 
@@ -142,22 +137,29 @@ func (h *HandlerLinks) GetbyID(w http.ResponseWriter, r *http.Request) {
 
 	id := r.URL.Query().Get("id")
 
-	idconv, err := strconv.Atoi(id)
+	// idconv, err := strconv.Atoi(id)
+	idconv, err := strconv.ParseUint(id, 0, 10)
 	if err != nil {
-		slog.Info("idconv")
+		slog.Error("strconv.Atoi(id)", "err", err)
 		return
 	}
 
 	respo, err := h.storage.Get(uint64(idconv))
 	if err != nil {
+		slog.Error("h.storage.Get(uint64(idconv))", "err", err)
 		return
 	}
 
 	statusResp := h.storage.Checker(respo)
 	if err := json.NewEncoder(w).Encode(statusResp); err != nil {
-		slog.Info("respo")
+		slog.Error("json.NewEncoder(w)", "err", err)
 		return
 	}
 
 	slog.Info("get")
+}
+
+func (h *HandlerLinks) GetList(w http.ResponseWriter, r *http.Request) {
+	initContentType(w)
+
 }

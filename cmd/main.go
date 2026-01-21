@@ -12,7 +12,7 @@ import (
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
+		Level: slog.LevelError,
 	}))
 
 	r := mux.NewRouter()
@@ -20,7 +20,7 @@ func main() {
 
 	h := internal.New(logger, r, &internal.Storage{})
 
-	r.HandleFunc("/links", h.GetStatus)
+	r.HandleFunc("/getstatus", h.GetStatus)
 	r.HandleFunc("/getbyid", h.GetbyID)
 
 	log.Fatal(http.ListenAndServe(":8080", r))

@@ -1,8 +1,6 @@
 package internal
 
 import (
-	"encoding/json"
-	"fmt"
 	"net/http"
 )
 
@@ -11,8 +9,7 @@ func MWRecoverPanic(next http.Handler) http.Handler {
 		defer func() {
 			if err := recover(); err != nil {
 				initContentType(w)
-				response := fmt.Sprintln("incorrect input:id")
-				json.NewEncoder(w).Encode(response)
+				http.Error(w, "internal server", http.StatusInternalServerError)
 			}
 		}()
 		next.ServeHTTP(w, r)
