@@ -53,7 +53,7 @@ func New(logger *slog.Logger, r *mux.Router, storage *Storage) *HandlerLinks {
 	}
 }
 
-func (s *Storage) Checker(arr []string) *map[string]string {
+func (s *Storage) Checker(arr []string) map[string]string {
 	status := make(map[string]string, len(arr))
 
 	for _, url := range arr {
@@ -72,7 +72,7 @@ func (s *Storage) Checker(arr []string) *map[string]string {
 		}
 	}
 
-	return &status
+	return status
 }
 
 func (s *Storage) Put(links []string) uint {
@@ -104,7 +104,7 @@ func (h *HandlerLinks) GetStatus(w http.ResponseWriter, r *http.Request) {
 
 	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
 		Error(w, http.StatusBadRequest)
-		h.logger.Error("json.NewDecoder(r.Body).Decode(&reqBody);")
+		h.logger.Error("json.NewDecoder(r.Body).Decode(&reqBody);", "err", err)
 		return
 	}
 
