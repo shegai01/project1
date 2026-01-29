@@ -53,7 +53,7 @@ func New(logger *slog.Logger, r *mux.Router, storage *Storage) *HandlerLinks {
 	}
 }
 
-func (s *Storage) Checker(arr []string) *map[string]string {
+func (s *Storage) Checker(arr []string) map[string]string {
 	status := make(map[string]string, len(arr))
 
 	for _, url := range arr {
@@ -72,7 +72,7 @@ func (s *Storage) Checker(arr []string) *map[string]string {
 		}
 	}
 
-	return &status
+	return status
 }
 
 func (s *Storage) Put(links []string) uint {
@@ -90,7 +90,6 @@ func (s *Storage) Get(id uint64) ([]string, error) {
 	defer s.mu.Unlock()
 
 	if id > uint64(len(s.Links)) {
-		slog.Error("id > uint64(len(s.Links))", "incorretly input", id)
 		return nil, errors.New("id < 0 || id > uint64(len(s.Links))")
 	}
 
@@ -105,28 +104,28 @@ func (h *HandlerLinks) GetStatus(w http.ResponseWriter, r *http.Request) {
 
 	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
 		Error(w, http.StatusBadRequest)
-		slog.Error("json.NewDecoder(r.Body).Decode(&reqBody);")
+		h.logger.Error("json.NewDecoder(r.Body).Decode(&reqBody);", "err", err)
 		return
 	}
 
 	id := h.storage.Put(reqBody.Links)
 	if len(reqBody.Links) == 0 {
-		slog.Error("h.storage.Put(reqBody.Links)", "id", id)
+		h.logger.Error("no links provided in request", "id", id)
 		return
 	}
 
 	sample, err := h.storage.Get(uint64(id))
 	if err != nil {
-		slog.Error("h.storage.Get", "err", err)
+		h.logger.Error("h.storage.Get", "err", err)
 		return
 	}
 
 	status := h.storage.Checker(sample)
 
-	slog.Info("status")
+	h.logger.Info("links status computed", "status", status)
 
 	if err := json.NewEncoder(w).Encode(status); err != nil {
-		slog.Error("json.NewEncoder(w).encode", "err", err)
+		h.logger.Error("json.NewEncoder(w).encode", "err", err)
 		return
 	}
 
@@ -138,28 +137,33 @@ func (h *HandlerLinks) GetbyID(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 
 	// idconv, err := strconv.Atoi(id)
-	idconv, err := strconv.ParseUint(id, 0, 10)
+	idconv, err := strconv.ParseUint(id, 10, 64)
 	if err != nil {
-		slog.Error("strconv.Atoi(id)", "err", err)
+		h.logger.Error("strconv.Atoi(id)", "err", err)
 		return
 	}
 
 	respo, err := h.storage.Get(uint64(idconv))
 	if err != nil {
-		slog.Error("h.storage.Get(uint64(idconv))", "err", err)
+		h.logger.Error("h.storage.Get(uint64(idconv))", "err", err)
 		return
 	}
 
 	statusResp := h.storage.Checker(respo)
 	if err := json.NewEncoder(w).Encode(statusResp); err != nil {
-		slog.Error("json.NewEncoder(w)", "err", err)
+		h.logger.Error("json.NewEncoder(w)", "err", err)
 		return
 	}
 
-	slog.Info("get")
+	h.logger.Info("get")
 }
 
 func (h *HandlerLinks) GetList(w http.ResponseWriter, r *http.Request) {
 	initContentType(w)
 
+	resp := h.storage.Links
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		h.logger.Error("failed to encode links list", "err", err)
+		return
+	}
 }
